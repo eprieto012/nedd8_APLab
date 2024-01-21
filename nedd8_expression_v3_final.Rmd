@@ -1,0 +1,1353 @@
+---
+title: "Expression of NEDD8 in naïve- and effector-like CD8+ T cells"
+author: "Endika Prieto @ Vall d'Hebron Institute of Oncology - VHIO <endikaprieto@vhio.net"
+date: "2024-01-21"
+output: html_document
+---
+
+```{r, message= FALSE, warning= FALSE}
+
+# Technical parameters.
+
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+
+# Libraries.
+
+library(Seurat)
+library(UCell)
+library(ProjecTILs)
+library(scGate)
+library(Biostrings)
+library(dplyr)
+library(stringr)
+library(patchwork)
+library(tidyverse)
+library(MetBrewer)
+library(RColorBrewer)
+library(Matrix)
+library(biomaRt)
+
+# Download the scGate CD8T model for the extraction of pure CD8+ T cells, modified to include the MAIT phenotype.
+
+models <- scGate::get_scGateDB()
+cd8.model <- models$human$generic$CD8T
+cd8.model <- scGate::gating_model(cd8.model, level=4, negative=T, name="MAIT", signature = c("KLRB1", "SLC4A10", "NCR3"))
+
+# Set working directory.
+
+datapath <- "path_to_wd"
+
+```
+
+Neddylation pathway (Reactome).
+
+```{r}
+
+# It is available for download in the link: https://www.gsea-msigdb.org/gsea/msigdb/human/geneset/REACTOME_NEDDYLATION.
+
+pathways <- list("neddylation"= c("KLHL13", "FBXL3", "ASB4", "PSMB1", "BRCA1", "PSMC4", "NUB1", "CUL3", "PSMA4", "DCUN1D1", "CUL7", "ERCC8", "CUL1", "PUM2", "BTBD1", "ASB1", "PSME4", "UFD1", "UBE2D1", "FBXW11", "KLHL20", "KEAP1", "PALB2", "PSMC5", "KLHL42", "BIRC5", "MUL1", "PSME1", "PSMD5", "PSMD8", "FBXL19", "KLHL22", "FBXO7", "RBX1", "PSMC6", "PSMA3", "ASB2", "HIF1A", "PSMC1", "PSMB5", "DCAF11", "PSMA6", "PSME2", "PSMA7", "PSMD10", "CCDC22", "ASB9", "RBBP7", "PSMD7", "FBXO31", "ELOB", "PSMA2", "FBXW4", "FBXL15", "CUL2", "FBXL20", "PSMD3", "PSMD11", "WSB1", "DCUN1D4", "UBE2D3", "KLHL2", "FBXW7", "KLHL5", "ZBTB16", "COMMD9", "PSMD9", "CAND1", "COPS7A", "SPSB2", "FBXO9", "FBXL4", "CUL9", "SKP1", "RNF7", "CISH", "COMMD2", "PSMD14", "ASB3", "DCAF17", "EPAS1", "NFE2L2", "FBXO2", "FBXO6", "RBBP5", "FBXO30", "FBXL5", "UCHL3", "FBXW2", "DCAF4", "KBTBD7", "SOCS2", "COPS5", "DCAF10", "OBSL1", "NEURL2", "HIF3A", "CDKN1A", "PSMF1", "PSMB2", "FBXL12", "FBXL16", "SEM1", "PSMA1", "NEDD8", "DDA1", "TULP4", "UBE2M", "PSME3", "UBE2D2", "FBXW9", "LRRC41", "DCAF8", "FBXO44", "VHL", "DDB2", "FBXO21", "FBXL8", "LMO7", "DCAF7", "PSMB7", "DCUN1D5", "FBXO11", "COPS4", "CUL4A", "DCAF5", "COMMD4", "COPS3", "FBXO15", "FEM1A", "PSMB6", "WDTC1", "PSMA5", "DCAF6", "COP1", "DTL", "RPS27A", "COPS7B", "UBA3", "SKP2", "FEM1C", "COMMD10", "KLHL3", "ASB15", "ASB10", "FBXO10", "ASB6", "COMMD3", "COMMD7", "DCUN1D2", "UBC", "FBXO4", "ASB17", "ELOC", "PSMA8", "FBXL18", "ANKRD9", "FBXO32", "CUL4B", "FBXW5", "PSMD4", "PSMB4", "NAE1", "SQSTM1", "FBXL13", "PSMC2", "FBXO27", "ASB16", "SPSB3", "CCNF", "KLHL21", "FBXO41", "DCAF16", "KBTBD8", "PSMD6", "FBXO40", "UBXN7", "FBXW12", "ASB5", "DCAF13", "ASB11", "VCP", "LRR1", "KBTBD6", "PSMC3", "BTRC", "SENP8", "COPS2", "CUL5", "FBXO22", "DDB1", "COPS6", "KCTD6", "FEM1B", "COMMD8", "CCDC8", "GPS1", "UBB", "COMMD5", "SOCS6", "SOCS5", "SPSB1", "FBXL14", "FBXW10", "COMMD1", "PSMD1", "FBXW8", "SPSB4", "PSMD2", "WSB2", "ASB8", "KLHL11", "ASB18", "NPLOC4", "ASB7", "FBXL7", "KLHL25", "UBE2F", "SOCS3", "AMER1", "BTBD6", "PSMD13", "DCUN1D3", "COMMD6", "WDR5", "ASB13", "PSMD12", "FBXL22", "COPS8", "KLHL9", "ASB12", "PSMB8", "PSMB10", "PSMB8", "UBD", "UBD", "UBA52", "PSMB11", "PSMB8", "UBD", "PSMB8", "PSMB8", "PSMB8", "UBD", "KBTBD13", "PSMB8", "PSMB8", "ASB14", "KLHL41", "PSMB9", "PSMB9", "PSMB9", "PSMB9", "PSMB9", "PSMB9", "KCTD7", "PSMB9", "PSMB9", "DPP3", "GAN", "FBXO17", "PSMB3", "PSMB3", "ASB2", "PSMC4", "FBXO17", "SQSTM1", "DCAF11", "PSME2", "PSME1", "NEDD8")
+)
+
+signature.names <- paste0(names(pathways), "_UCell")
+
+```
+
+# Lung cancer atlas.
+
+Using a public lung cancer atlas, we first examined the expression of NEDD8 and the neddylation signature in tumor-associated immune populations.
+
+```{r, message= FALSE}
+
+# Publication: https://www.nature.com/articles/s41597-023-02074-6
+# Data: https://figshare.com/articles/dataset/NSCLC_Final_dataset/22114682?backTo=/collections/An_integrated_single-cell_transcriptomic_dataset_for1_non-small_cell_lung_cancer/6222221
+
+LC_1_data <- readRDS(file.path(datapath, "data/SciData_lung/refquery_final.rds"))
+
+# Plot original annotations (Cell_Cluster_level1).
+
+ndim <- length(levels(as.factor(LC_1_data$Cell_Cluster_level1)))
+
+LC_1_plot_major <- DimPlot(LC_1_data, group.by= "Cell_Cluster_level1", cols= met.brewer("Klimt", ndim), label = T, repel = T) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC1_major")
+
+ggsave(plot = LC_1_plot_major, file.path(datapath, "plots_final/LC_1_major.pdf"), height = 9)
+
+LC_1_plot_major
+
+```
+
+```{r}
+
+# Plot original annotations (Cell_Cluster_level2).
+
+ndim <- length(levels(as.factor(LC_1_data$Cell_Cluster_level2)))
+
+LC_1_plot_minor <- DimPlot(LC_1_data, group.by= "Cell_Cluster_level2", cols= met.brewer("Klimt", ndim), label = T, repel = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC1_minor")
+
+ggsave(plot = LC_1_plot_minor, file.path(datapath, "plots_final/LC_1_minor.pdf"), height = 10, width = 15)
+
+LC_1_plot_minor
+
+```
+
+Calculation of the UCell score for the neddylation pathway (Reactome).
+
+```{r}
+
+LC_1_data <- AddModuleScore_UCell(LC_1_data, assay = "RNA", features = pathways, ncores=8)
+
+```
+
+Version A. Expression of NEDD8, NAE1 and neddylation signature only in immune populations.
+
+```{r}
+
+# Subset 1: Only immune populations.
+
+subset1 <- c("CAF", "CD4+ Treg", "CD8+ Tem", "cDC2/moDCs", "Lipid-associated Mac", "Mature naive B", "Monocytes", "Naive T", "Neutrophils", "NK", "pDCs", "Proliferating Mac", "Proliferating T/NK")
+
+LC_1_S1 <- subset(LC_1_data, subset = Cell_Cluster_level2 %in% subset1)
+
+table(LC_1_S1$Cell_Cluster_level2)
+
+# Re-calculate embeddings.
+
+DefaultAssay(LC_1_S1) <- "integrated"
+LC_1_S1 <- FindNeighbors(LC_1_S1, reduction="pca", dims=1:10)
+LC_1_S1 <- FindClusters(LC_1_S1,resolution=1.2)
+LC_1_S1 <- RunUMAP(LC_1_S1, dims=1:10)
+
+# Checkpoint.
+
+saveRDS(object = LC_1_S1, file = file.path(datapath, "seurat/LC_1_S1.rds"))
+LC_1_S1 <- readRDS(file.path(datapath, "seurat/LC_1_S1.rds"))
+
+# Correction of some incoherent annotations between original Cell_Cluster_Level1 and Cell_Cluster_Level2.
+
+LC_1_S1 <- subset(LC_1_S1, subset = Cell_Cluster_level1 != "Cancer")
+LC_1_S1 <- subset(LC_1_S1, subset = Cell_Cluster_level1 != "Plasma")
+
+DefaultAssay(LC_1_S1) <- "RNA"
+
+# Plot original annotations (Cell_Cluster_level1).
+
+ndim <- length(levels(as.factor(LC_1_S1$Cell_Cluster_level1)))
+
+LC_1_S1_major <- DimPlot(LC_1_S1, group.by= "Cell_Cluster_level1", cols= met.brewer("Klimt", ndim), label = T, repel = T) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_1_S1_major")
+
+ggsave(plot = LC_1_S1_major, file.path(datapath, "plots_final/LC_1_S1_major.pdf"), height = 9)
+
+LC_1_S1_major
+
+# Create the color palette for plotting.
+
+levels <- levels(as.factor(LC_1_S1$Cell_Cluster_level1))
+colors <- met.brewer("Klimt", ndim)
+names(colors) <- levels
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (Cell_Cluster_level1).
+
+```{r}
+
+# Expression levels.
+
+LC_1_S1_major_vln <- VlnPlot(LC_1_S1,
+                             features =  c("NEDD8", "NAE1", signature.names),
+                             group.by = "Cell_Cluster_level1",
+                             pt.size = 0,
+                             raster = F, slot = "data", add.noise = F,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S1_major_vln, file.path(datapath, "plots_final/LC_1_S1_major_vln.pdf"), height = 9)
+
+LC_1_S1_major_vln
+
+```
+
+```{r}
+
+# Counts.
+
+LC_1_S1_major_vln_counts <- VlnPlot(LC_1_S1,
+                             features =  c("NEDD8", "NAE1"),
+                             group.by = "Cell_Cluster_level1",
+                             pt.size = 0.1,
+                             raster = F, slot = "counts", log = T,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S1_major_vln_counts, file.path(datapath, "plots_final/LC_1_S1_major_vln_counts.pdf"), height = 9)
+
+LC_1_S1_major_vln_counts
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (Cell_Cluster_level2).
+
+```{r}
+
+# Plot original annotations (Cell_Cluster_level2).
+
+ndim <- length(levels(as.factor(LC_1_S1$Cell_Cluster_level2)))
+
+LC_1_S1_minor <- DimPlot(LC_1_S1, group.by= "Cell_Cluster_level2", cols= met.brewer("Klimt", ndim), label = T, repel = T) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_1_S1_minor")
+
+ggsave(plot = LC_1_S1_minor, file.path(datapath, "plots_final/LC_1_S1_minor.pdf"), height = 9)
+
+LC_1_S1_minor
+
+# Create the color palette for plotting.
+
+levels <- levels(as.factor(LC_1_S1$Cell_Cluster_level2))
+colors <- met.brewer("Klimt", ndim)
+names(colors) <- levels
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (Cell_Cluster_level2).
+
+```{r}
+
+# Expression levels.
+
+LC_1_S1_minor_vln <- VlnPlot(LC_1_S1,
+                             features =  c("NEDD8", "NAE1", signature.names),
+                             group.by = "Cell_Cluster_level2",
+                             pt.size = 0,
+                             raster = F, slot = "data", add.noise = F,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S1_minor_vln, file.path(datapath, "plots_final/LC_1_S1_minor_vln.pdf"), height = 9, width = 12)
+
+LC_1_S1_minor_vln
+
+```
+
+```{r}
+
+# Counts.
+
+LC_1_S1_minor_vln_counts <- VlnPlot(LC_1_S1,
+                             features =  c("NEDD8", "NAE1"),
+                             group.by = "Cell_Cluster_level2",
+                             pt.size = 0.1,
+                             raster = F, slot = "counts", log = T,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S1_minor_vln_counts, file.path(datapath, "plots_final/LC_1_S1_minor_vln_counts.pdf"), height = 9)
+
+LC_1_S1_minor_vln_counts
+
+```
+
+Version B. Expression of NEDD8, NAE1 and neddylation signature in immune populations and in endothelial and cancer cells.
+
+```{r}
+
+# Subset 2: Immune populations + endothelial and cells.
+
+subset2 <- c(subset1, "CDKN2A Cancer", "CXCL1 Cancer", "LAMC2 Cancer", "SOX2 Cancer","Endothelial", "Proliferating Cancer")
+
+LC_1_S2 <- subset(LC_1_data, subset = Cell_Cluster_level2 %in% subset2)
+
+table(LC_1_S2$Cell_Cluster_level2)
+
+# Re-calculate embeddings.
+
+DefaultAssay(LC_1_S2) <- "integrated"
+LC_1_S2 <- FindNeighbors(LC_1_S2, reduction="pca", dims=1:10)
+LC_1_S2 <- FindClusters(LC_1_S2,resolution=1.2)
+LC_1_S2 <- RunUMAP(LC_1_S2, dims=1:10)
+
+# Checkpoint.
+
+saveRDS(object = LC_1_S2, file = file.path(datapath, "seurat/LC_1_S2.rds"))
+LC_1_S2 <- readRDS(file.path(datapath, "seurat/LC_1_S2.rds"))
+
+# Correction of some incoherent annotations between original Cell_Cluster_Level1 and Cell_Cluster_Level2.
+
+LC_1_S2 <- subset(LC_1_S2, subset = Cell_Cluster_level1 != "Ciliated")
+LC_1_S2 <- subset(LC_1_S2, subset = Cell_Cluster_level1 != "Plasma")
+
+DefaultAssay(LC_1_S2) <- "RNA"
+
+# Plot original annotations (Cell_Cluster_level1).
+
+ndim <- length(levels(as.factor(LC_1_S2$Cell_Cluster_level1)))
+
+LC_1_S2_major <- DimPlot(LC_1_S2, group.by= "Cell_Cluster_level1", cols= met.brewer("Klimt", ndim), label = T, repel = T) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_1_S2_major")
+
+ggsave(plot = LC_1_S2_major, file.path(datapath, "plots_final/LC_1_S2_major.pdf"), height = 9)
+
+LC_1_S2_major
+
+# Create the color palette for plotting.
+
+levels <- levels(as.factor(LC_1_S2$Cell_Cluster_level1))
+colors <- met.brewer("Klimt", ndim)
+names(colors) <- levels
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (Cell_Cluster_level1).
+
+```{r}
+
+# Expression levels.
+
+LC_1_S2_major_vln <- VlnPlot(LC_1_S2,
+                             features =  c("NEDD8", "NAE1", signature.names),
+                             group.by = "Cell_Cluster_level1",
+                             pt.size = 0,
+                             raster = F, slot = "data", add.noise = F,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S2_major_vln, file.path(datapath, "plots_final/LC_1_S2_major_vln.pdf"), height = 9)
+
+LC_1_S2_major_vln
+
+```
+
+```{r}
+
+# Counts.
+
+LC_1_S2_major_vln_counts <- VlnPlot(LC_1_S2,
+                             features =  c("NEDD8", "NAE1"),
+                             group.by = "Cell_Cluster_level1",
+                             pt.size = 0.1,
+                             raster = F, slot = "counts", log = T,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+LC_1_S2_major_vln_counts
+
+ggsave(plot = LC_1_S2_major_vln_counts, file.path(datapath, "plots_final/LC_1_S2_major_vln_counts.pdf"), height = 9)
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (Cell_Cluster_level2).
+
+```{r}
+
+# Plot original annotations (Cell_Cluster_level2).
+
+ndim <- length(levels(as.factor(LC_1_S2$Cell_Cluster_level2)))
+
+LC_1_S2_minor <- DimPlot(LC_1_S2, group.by= "Cell_Cluster_level2", cols= met.brewer("Klimt", ndim), label = T, repel = T) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_1_S2_minor")
+
+ggsave(plot = LC_1_S2_minor, file.path(datapath, "plots_final/LC_1_S2_minor.pdf"), height = 9)
+
+LC_1_S2_minor
+
+# Create the color palette for plotting.
+
+levels <- levels(as.factor(LC_1_S2$Cell_Cluster_level2))
+colors <- met.brewer("Klimt", ndim)
+names(colors) <- levels
+
+```
+
+Expression of NEDD8, NAE1 and neddylation signature (level 1).
+
+```{r}
+
+# Expression levels.
+
+LC_1_S2_minor_vln <- VlnPlot(LC_1_S2,
+                             features =  c("NEDD8", "NAE1", signature.names),
+                             group.by = "Cell_Cluster_level2",
+                             pt.size = 0,
+                             raster = F, slot = "data", add.noise = F,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S2_minor_vln, file.path(datapath, "plots_final/LC_1_S2_minor_vln.pdf"), height = 9, width = 15)
+
+LC_1_S2_minor_vln
+
+```
+
+```{r}
+
+# Counts.
+
+LC_1_S2_minor_vln_counts <- VlnPlot(LC_1_S2,
+                             features =  c("NEDD8", "NAE1"),
+                             group.by = "Cell_Cluster_level2",
+                             pt.size = 0.1,
+                             raster = F, slot = "counts", log = T,
+                             sort = "decreasing",
+                             cols = colors) +
+  theme(aspect.ratio = 0.5)
+
+ggsave(plot = LC_1_S2_minor_vln_counts, file.path(datapath, "plots_final/LC_1_S2_minor_vln_counts.pdf"), height = 9)
+
+LC_1_S2_minor_vln_counts
+
+```
+
+# Lung cancer Kim et al.
+
+Second, we performed a complementary analysis in a representative lung cancer study (GSE131907) to further investigate the expression of NEDD8 in naïve- and effector-like CD8+ T cells.
+
+Data loading and processing.
+
+```{r}
+
+# Publication: https://pubmed.ncbi.nlm.nih.gov/32385277/
+# Data: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131907
+
+# Create the Seurat from the count matrix.
+
+LC_2_data <- readRDS(file.path(datapath, "data/GSE131907_lung/GSE131907_Lung_Cancer_raw_UMI_matrix.rds"))
+LC_2_data <- CreateSeuratObject(counts = LC_2_data, assay = "RNA")
+
+# Add metadata.
+
+LC_2_metadata <- read.csv(file.path(datapath, "data/GSE131907_lung/GSE131907_Lung_Cancer_cell_annotation.csv"), header = T, sep = ";")
+match <- intersect(colnames(LC_2_data), LC_2_metadata$Index)
+match <- LC_2_metadata[match(match, LC_2_metadata$Index), ]
+
+LC_2_data@meta.data <- cbind(LC_2_data@meta.data, match)
+
+```
+
+Proportion of mitochondrial and ribosomal genes.
+
+```{r}
+
+percent.mt <- PercentageFeatureSet(LC_2_data, pattern="^MT-")
+LC_2_data <- AddMetaData(LC_2_data, metadata = percent.mt, col.name = "percent.mt")
+
+percent.rpa <- PercentageFeatureSet(LC_2_data, pattern="^RPA")
+LC_2_data <- AddMetaData(LC_2_data, metadata = percent.rpa, col.name = "percent.RPA")
+
+# Randomly sample 1K cells to set cutoffs.
+
+data.test <- LC_2_data[,sample(1:ncol(LC_2_data), 1000)]       
+VlnPlot(data.test, features=c("nCount_RNA","nFeature_RNA", "percent.mt", "percent.RPA"))
+
+# Filter cells.
+
+LC_2_data <- subset(LC_2_data, subset = nFeature_RNA > 500 & percent.mt < 7.5)
+
+# Number of cells remains very high. Randomly sample 100K cells to reduce sample size.
+
+LC_2_data <- LC_2_data[,sample(1:ncol(LC_2_data), 100000)]
+
+```
+
+Data normalization and UMAP reduction.
+
+```{r}
+
+LC_2_data <- NormalizeData(LC_2_data)
+LC_2_data <- FindVariableFeatures(LC_2_data, selection.method="vst", nfeatures=5000)
+allGenes <- rownames(LC_2_data)
+LC_2_data <- ScaleData(LC_2_data, features=allGenes)
+LC_2_data <- RunPCA(LC_2_data, features=VariableFeatures(object=LC_2_data))
+LC_2_data <- FindNeighbors(LC_2_data, reduction="pca", dims=1:10)
+LC_2_data <- FindClusters(LC_2_data, resolution=1.2)
+LC_2_data <- RunUMAP(LC_2_data, dims=1:10)
+
+```
+
+Check some signatures for major cell types (internal control).
+
+```{r}
+
+sigs <- list("Immune"=c("PTPRC"),
+             "Myeloid"=c("SPI1"),
+             "Tcell"=c("CD3D","CD3E","CD3G","CD2"),
+             "Cd8T"=c("CD8A","CD8B","CD4-"),
+             "Cd4T"=c("CD4","CD40LG"),
+             "Treg"=c("CD4","FOXP3"),
+             "Stromal"= c("MMP2","COL1A1","COL1A2","COL5A1","LUM","PDGFRA"),
+             "Bcell" = c("CD79A","MS4A1","BANK1","PAX5","CD19"),
+             "NK" = c("KLRD1","NKG7","NCR1","FCGR3A","CD3D-","CD3E-","CD3G-"),
+             "MoMacDC" = c("LYZ","CSF1R","MSR1","MAFB","CD300E"),
+             "Plasma_cell" = c("IGKC","IGHG3","IGHG1","IGHA1","CD19-"),
+             "MAIT"=c("KLRB1", "SLC4A10", "NCR3"),
+             "iNKT"=c("ZBTB16"),
+             "KIR_NK"=c("TXK","KIR2DL3")
+             )
+
+cycling.g1 <- scGate::genes.blacklist.default$Hs$cellCycle.G1S
+cycling.g2 <- scGate::genes.blacklist.default$Hs$cellCycle.G2M
+cycling <- c(cycling.g1, cycling.g2)
+sigs$cycling = cycling
+
+DefaultAssay(LC_2_data) <- "RNA"
+LC_2_data <- AddModuleScore_UCell(LC_2_data, features = sigs, ncores=8)
+signature.names <- paste0(names(sigs), "_UCell")
+
+# Plot major cell type signatures.
+
+int.control.1 <- FeaturePlot(LC_2_data, features= signature.names)
+wrap_plots(int.control.1)
+
+```
+
+Extraction of pure CD8+ T cells.
+
+```{r}
+
+# Apply the scGate CD8 model, modified to include MAITs.
+
+LC_2_data_cd8 <- scGate(LC_2_data, model=cd8.model, ncores=8, pca.dim = 10)
+cols = c("#10f87b", "gray50")
+
+sum(LC_2_data_cd8$is.pure == "Pure")
+
+LC_2_plot_cd8 <- DimPlot(LC_2_data_cd8, group.by="is.pure", cols = cols) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "CD8+ T cells", subtitle = "n cells")
+
+LC_2_plot_cd8
+
+ggsave(plot = LC_2_plot_cd8, file.path(datapath, "plots/LC_2_pure_CD8.pdf"), height = 7, width = 7)
+
+# Finally, subset pure CD8+ T cells.
+
+LC_2_data_cd8 <- subset(LC_2_data_cd8, subset=is.pure=="Pure")
+
+```
+
+Annotation of CD8+ T cells using a human CD8+ TIL atlas in ProjecTILs.
+
+```{r}
+
+# Load the reference map CD8T_human_ref_v1.rds.
+
+ref.use <- load.reference.map()
+
+# Project CD8+ T cells on the reference.
+
+LC_2_proj <- make.projection(LC_2_data_cd8, ref=ref.use, filter.cells = FALSE, skip.normalize = T, ncores=8)
+LC_2_proj <- cellstate.predict(ref = ref.use, query = LC_2_proj)
+
+# Subset T cells coming from normal or tumor tissue. 
+
+levels(as.factor(LC_2_proj$Sample_Origin))
+LC_2_proj <- subset(LC_2_proj, subset = Sample_Origin %in% c("nLung", "tLung"))
+
+# Re-calculate embeedings.
+
+LC_2_proj <- FindNeighbors(LC_2_proj, reduction="pca", dims=1:20)
+LC_2_proj <- FindClusters(LC_2_proj,resolution=1.6)
+LC_2_proj <- RunUMAP(LC_2_proj, dims=1:20)
+
+# Calculate the UCell score for the neddylation pathway (Reactome).
+
+LC_2_proj <- AddModuleScore_UCell(LC_2_proj, assay = "RNA", features = pathways, ncores=8)
+
+# Save annotated data.
+
+saveRDS(LC_2_proj, file.path(datapath, "seurat/LC_2_proj.rds"))
+
+```
+
+Plots.
+
+```{r}
+
+# Plot colors.
+
+colors = list("CD8.CM" = "#A6CEE3",
+              "CD8.EM" = "#1F78B4",
+              "CD8.MAIT" = "#B2DF8A",
+              "CD8.NaiveLike" = "#33A02C",
+              "CD8.TEMRA" = "#FB9A99",
+              "CD8.TEX" = "#E31A1C",
+              "CD8.TPEX" = "#FDBF6F")
+
+# Plot by functional.cluster.
+
+LC_2_plot_proj <- DimPlot(LC_2_proj, group.by= "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_2_ProjecTILs")
+
+ggsave(plot = LC_2_plot_proj, file.path(datapath,"plots_final/LC_2_projectils.pdf"), width = 7, height = 7)
+
+LC_2_plot_proj
+
+# Split by phenotype.
+
+LC_2_plot_proj_phen <- DimPlot(LC_2_proj, group.by= "functional.cluster", split.by = "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "LC_2_ProjecTILs")
+
+ggsave(plot = LC_2_plot_proj_phen, file.path(datapath, "plots_final/LC_2_projectils_phenotype.pdf"), width = 15, height = 4)
+
+LC_2_plot_proj_phen
+
+```
+
+# Melanoma Jerby-Arnon et al.
+
+We also examined the expression of NEDD8 and the neddylation signature in tumor-associated CD8+ T cells in melanoma using data from GSE115978.
+
+Data loading and processing.
+
+```{r}
+
+# Publication: https://pubmed.ncbi.nlm.nih.gov/30388455/
+# Data: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE115978
+
+# Create the Seurat from the count matrix.
+
+counts <- read.csv(file.path(datapath, "data/GSE115978_mel_icb/GSE115978_counts.csv.gz"))
+
+Mel_3_data <- CreateSeuratObject(counts = counts, assay = "RNA")
+Mel_3_data <- Mel_3_data[,-1]
+
+gene_names <- counts[1]$X
+rownames(Mel_3_data) <- gene_names
+
+# Add metadata.
+
+annotations <- read.csv(file.path(datapath, "data/GSE115978_mel_icb/GSE115978_cell.annotations.csv.gz"))
+Mel_3_data <- AddMetaData(Mel_3_data, annotations, col.name = NULL)
+
+```
+
+Proportion of mitochondrial and ribosomal genes.
+
+```{r}
+
+percent.mt <- PercentageFeatureSet(Mel_3_data, pattern="^MT-")
+Mel_3_data <- AddMetaData(Mel_3_data, metadata = percent.mt, col.name = "percent.mt")
+
+# No mitochondrial genes were identified.
+
+percent.rpa <- PercentageFeatureSet(Mel_3_data, pattern="^RPA")
+Mel_3_data <- AddMetaData(Mel_3_data, metadata = percent.rpa, col.name = "percent.RPA")
+
+# Randomly sample 1K cells to set cutoffs.
+
+data.test <- Mel_3_data[,sample(1:ncol(Mel_3_data), 1000)]
+data.test$orig.ident <- "GSE115978"
+VlnPlot(data.test, features=c("nCount_RNA","nFeature_RNA", "percent.RPA"), group.by = "orig.ident")
+
+# Filter cells.
+
+Mel_3_data <- subset(Mel_3_data, subset = nCount_RNA >= 500 & nCount_RNA <= 643519) # Max value of nCount_RNA set as the 3rd quartile of the total.
+
+```
+
+Data normalization and UMAP reduction.
+
+```{r}
+
+Mel_3_data <- NormalizeData(Mel_3_data)
+Mel_3_data <- FindVariableFeatures(Mel_3_data, selection.method="vst", nfeatures=5000)
+allGenes <- rownames(Mel_3_data)
+Mel_3_data <- ScaleData(Mel_3_data, features=allGenes)
+Mel_3_data <- RunPCA(Mel_3_data, features=VariableFeatures(object=Mel_3_data))
+Mel_3_data <- FindNeighbors(Mel_3_data, reduction="pca", dims=1:10)
+Mel_3_data <- FindClusters(Mel_3_data, resolution=1.2)
+Mel_3_data <- RunUMAP(Mel_3_data, dims=1:10)
+
+```
+
+Check some signatures for major cell types (internal control).
+
+```{r}
+
+sigs <- list("Immune"=c("PTPRC"),
+             "Myeloid"=c("SPI1"),
+             "Tcell"=c("CD3D","CD3E","CD3G","CD2"),
+             "Cd8T"=c("CD8A","CD8B","CD4-"),
+             "Cd4T"=c("CD4","CD40LG"),
+             "Treg"=c("CD4","FOXP3"),
+             "Stromal"= c("MMP2","COL1A1","COL1A2","COL5A1","LUM","PDGFRA"),
+             "Bcell" = c("CD79A","MS4A1","BANK1","PAX5","CD19"),
+             "NK" = c("KLRD1","NKG7","NCR1","FCGR3A","CD3D-","CD3E-","CD3G-"),
+             "MoMacDC" = c("LYZ","CSF1R","MSR1","MAFB","CD300E"),
+             "Plasma_cell" = c("IGKC","IGHG3","IGHG1","IGHA1","CD19-"),
+             "MAIT"=c("KLRB1", "SLC4A10", "NCR3"),
+             "iNKT"=c("ZBTB16"),
+             "KIR_NK"=c("TXK","KIR2DL3")
+             )
+
+cycling.g1 <- scGate::genes.blacklist.default$Hs$cellCycle.G1S
+cycling.g2 <- scGate::genes.blacklist.default$Hs$cellCycle.G2M
+cycling <- c(cycling.g1, cycling.g2)
+sigs$cycling = cycling
+
+DefaultAssay(Mel_3_data) <- "RNA"
+Mel_3_data <- AddModuleScore_UCell(Mel_3_data, features = sigs, ncores=8)
+signature.names <- paste0(names(sigs), "_UCell")
+
+# Plot major cell type signatures.
+
+int.control.1 <- FeaturePlot(Mel_3_data, features= signature.names)
+wrap_plots(int.control.1)
+
+```
+
+Extraction of pure CD8+ T cells.
+
+```{r}
+
+# First, subset bulk T cells using original annotations.
+
+table(Mel_3_data$cell.types)
+Mel_3_data_t <- subset(Mel_3_data, subset = cell.types %in% c("T.CD4", "T.CD8", "T.cell"))
+
+# Apply the scGate CD8 model, modified to include MAITs.
+
+Mel_3_data_cd8 <- scGate(Mel_3_data_t, model=cd8.model, ncores=8, pca.dim = 10)
+cols = c("#10f87b", "gray50")
+
+sum(Mel_3_data_cd8$is.pure == "Pure")
+
+Mel_3_plot_cd8 <- DimPlot(Mel_3_data_cd8, group.by="is.pure", cols = cols) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "CD8+ T cells", subtitle = "1,311 cells")
+
+Mel_3_plot_cd8
+
+ggsave(plot = Mel_3_plot_cd8, file.path(datapath, "plots/Mel_3_pure_CD8.pdf"), height = 7, width = 7)
+
+# Finally, subset pure CD8+ T cells.
+
+Mel_3_data_cd8 <- subset(Mel_3_data_cd8, subset=is.pure=="Pure")
+
+```
+
+Annotation of CD8+ T cells using a human CD8+ TIL atlas in ProjecTILs.
+
+```{r}
+
+# Load the reference map CD8T_human_ref_v1.rds.
+
+ref.use <- load.reference.map()
+
+# Project CD8+ T cells on the reference.
+
+ML_3_proj <- make.projection(Mel_3_data_cd8, ref=ref.use, filter.cells = FALSE, skip.normalize = T, ncores=8)
+ML_3_proj <- cellstate.predict(ref = ref.use, query = ML_3_proj)
+
+# Re-calculate embeedings.
+
+ML_3_proj <- FindNeighbors(ML_3_proj, reduction="pca", dims=1:10)
+ML_3_proj <- FindClusters(ML_3_proj,resolution=1.2)
+ML_3_proj <- RunUMAP(ML_3_proj, dims=1:10)
+
+# Calculate the UCell score for the neddylation pathway (Reactome).
+
+ML_3_proj <- AddModuleScore_UCell(ML_3_proj, assay = "RNA", features = pathways, ncores=8)
+
+# Save annotated data.
+
+saveRDS(ML_3_proj, file.path(datapath, "seurat/ML_3_proj.rds"))
+
+```
+
+Plots.
+
+```{r}
+
+# Plot by functional.cluster.
+
+Mel_3_plot_proj <- DimPlot(ML_3_proj, group.by= "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "ML_3_projecTILs")
+
+ggsave(plot = Mel_3_plot_proj, file.path(datapath,"plots_final/ML_3_projectils.pdf"), width = 7, height = 7)
+
+Mel_3_plot_proj
+
+# Split by phenotype.
+
+Mel_3_plot_proj_phen <- DimPlot(ML_3_proj, group.by= "functional.cluster", split.by = "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "ML_3_projecTILs")
+
+ggsave(plot = Mel_3_plot_proj_phen, file.path(datapath, "plots_final/ML_3_projectils_phenotype.pdf"), width = 15, height = 4)
+
+Mel_3_plot_proj_phen
+
+```
+
+# Hepatocarcinoma Ma et al.
+
+We also examined the expression of NEDD8 and the neddylation signature in tumor-associated CD8+ T cells in hepatocarcinoma using GSE125499 data (set 1).
+
+Data loading and processing.
+
+```{r}
+
+# Publication: https://pubmed.ncbi.nlm.nih.gov/31588021/
+# Data: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125449
+
+# Create the Seurat from the count matrix.
+
+list.files(file.path(datapath, "data/GSE125499_hepato_set1"))
+
+HCC_5_data <- Read10X(file.path(datapath, "data/GSE125499_hepato_set1"))
+HCC_5_data <- CreateSeuratObject(counts = HCC_5_data, assay = "RNA")
+
+# Add metadata.
+
+HCC_5_metadata <- read.table(file.path(datapath, "data/GSE125499_hepato_set1/GSE125449_Set1_samples.txt"), sep = "\t", header = T)
+HCC_5_data <- AddMetaData(object = HCC_5_data, metadata = HCC_5_metadata)
+
+```
+
+Proportion of mitochondrial and ribosomal genes.
+
+```{r}
+
+percent.mt <- PercentageFeatureSet(HCC_5_data, pattern="^MT-")
+HCC_5_data <- AddMetaData(HCC_5_data, metadata = percent.mt, col.name = "percent.mt")
+
+percent.rpa <- PercentageFeatureSet(HCC_5_data, pattern="^RPA")
+HCC_5_data <- AddMetaData(HCC_5_data, metadata = percent.rpa, col.name = "percent.RPA")
+
+# Randomly sample 1K cells to set cutoffs.
+
+data.test <- HCC_5_data[,sample(1:ncol(HCC_5_data), 1000)]
+data.test$orig.ident <- "GSE125499"
+VlnPlot(data.test, features=c("nCount_RNA","nFeature_RNA", "percent.mt", "percent.RPA"), group.by = "orig.ident")
+
+# Filter cells.
+
+HCC_5_data <- subset(HCC_5_data, subset = nCount_RNA >= 250 & nCount_RNA <= 9108 & percent.mt <= 10) # Max value of nCount_RNA set as the 3rd quartile of the total.
+
+```
+
+Data normalization and UMAP reduction.
+
+```{r}
+
+HCC_5_data <- NormalizeData(HCC_5_data)
+HCC_5_data <- FindVariableFeatures(HCC_5_data, selection.method="vst", nfeatures=5000)
+allGenes <- rownames(HCC_5_data)
+HCC_5_data <- ScaleData(HCC_5_data, features=allGenes)
+HCC_5_data <- RunPCA(HCC_5_data, features=VariableFeatures(object=HCC_5_data))
+HCC_5_data <- FindNeighbors(HCC_5_data, reduction="pca", dims=1:10)
+HCC_5_data <- FindClusters(HCC_5_data, resolution=1.2)
+HCC_5_data <- RunUMAP(HCC_5_data, dims=1:10)
+
+```
+
+Check some signatures for major cell types (internal control).
+
+```{r}
+
+sigs <- list("Immune"=c("PTPRC"),
+             "Myeloid"=c("SPI1"),
+             "Tcell"=c("CD3D","CD3E","CD3G","CD2"),
+             "Cd8T"=c("CD8A","CD8B","CD4-"),
+             "Cd4T"=c("CD4","CD40LG"),
+             "Treg"=c("CD4","FOXP3"),
+             "Stromal"= c("MMP2","COL1A1","COL1A2","COL5A1","LUM","PDGFRA"),
+             "Bcell" = c("CD79A","MS4A1","BANK1","PAX5","CD19"),
+             "NK" = c("KLRD1","NKG7","NCR1","FCGR3A","CD3D-","CD3E-","CD3G-"),
+             "MoMacDC" = c("LYZ","CSF1R","MSR1","MAFB","CD300E"),
+             "Plasma_cell" = c("IGKC","IGHG3","IGHG1","IGHA1","CD19-"),
+             "MAIT"=c("KLRB1", "SLC4A10", "NCR3"),
+             "iNKT"=c("ZBTB16"),
+             "KIR_NK"=c("TXK","KIR2DL3")
+             )
+
+cycling.g1 <- scGate::genes.blacklist.default$Hs$cellCycle.G1S
+cycling.g2 <- scGate::genes.blacklist.default$Hs$cellCycle.G2M
+cycling <- c(cycling.g1, cycling.g2)
+sigs$cycling = cycling
+
+DefaultAssay(HCC_5_data) <- "RNA"
+HCC_5_data <- AddModuleScore_UCell(HCC_5_data, features = sigs, ncores=8)
+signature.names <- paste0(names(sigs), "_UCell")
+
+# Plot major cell type signatures.
+
+int.control.1 <- FeaturePlot(HCC_5_data, features= signature.names)
+wrap_plots(int.control.1)
+
+```
+
+Extraction of pure CD8+ T cells.
+
+```{r}
+
+# First, subset bulk T cells and unclassified cells using original annotations.
+
+table(HCC_5_data$Type)
+HCC_5_data_t <- subset(HCC_5_data, subset = Type %in% c("T cell", "unclassified"))
+
+# Apply the scGate CD8 model, modified to include MAITs.
+
+HCC_5_data_cd8 <- scGate(HCC_5_data_t, model=cd8.model, ncores=8, pca.dim = 10)
+cols = c("#10f87b", "gray50")
+
+sum(HCC_5_data_cd8$is.pure == "Pure")
+
+HCC_5_plot_cd8 <- DimPlot(HCC_5_data_cd8, group.by="is.pure", cols = cols) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "CD8+ T cells", subtitle = "903 cells")
+
+HCC_5_plot_cd8
+
+ggsave(plot = HCC_5_plot_cd8, file.path(datapath, "plots/HCC_5_pure_CD8.pdf"), height = 7, width = 7)
+
+# Finally, subset pure CD8+ T cells.
+
+HCC_5_data_cd8 <- subset(HCC_5_data_cd8, subset=is.pure=="Pure")
+
+# Only 903 pure CD8+ T cells were identified. We check the CD8:CD4 ratio of the T cell compartment.
+
+```
+
+Verification of the ratio of CD8:CD4+ T cells in the sample (internal control).
+
+```{r}
+
+# Download scGate CD4T model.
+
+cd4.model <- models$human$generic$CD4T
+cd4.model <- scGate::gating_model(cd4.model, level=4, negative=T, name="MAIT", signature = c("KLRB1", "SLC4A10", "NCR3"))
+
+# Apply the CD4 model using scGate.
+
+HCC_5_data_cd4 <- scGate(HCC_5_data_t, model=cd4.model, ncores=8, pca.dim = 10)
+cols = c("#10f87b", "gray50")
+
+# Check the number of CD4T: 4,496 cells.
+
+sum(HCC_5_data_cd4$is.pure == "Pure")
+
+# The ratio of CD8:CD4 in this sample is approximately 1:5.
+
+```
+
+Annotation of CD8+ T cells using a human CD8+ TIL atlas in ProjecTILs.
+
+```{r}
+
+# Load the reference map CD8T_human_ref_v1.rds.
+
+ref.use <- load.reference.map()
+
+# Project CD8+ T cells on the reference.
+
+HC_5_proj <- make.projection(HCC_5_data_cd8, ref=ref.use, filter.cells = FALSE, skip.normalize = T, ncores=8)
+HC_5_proj <- cellstate.predict(ref = ref.use, query = HC_5_proj)
+
+# Re-calculate embeedings.
+
+HC_5_proj <- FindNeighbors(HC_5_proj, reduction="pca", dims=1:10)
+HC_5_proj <- FindClusters(HC_5_proj,resolution=1.2)
+HC_5_proj <- RunUMAP(HC_5_proj, dims=1:10)
+
+# Calculate the UCell score for the neddylation pathway (Reactome).
+
+HC_5_proj <- AddModuleScore_UCell(HC_5_proj, assay = "RNA", features = pathways, ncores=8)
+
+# Save annotated data.
+
+saveRDS(HC_5_proj, file.path(datapath, "seurat/HC_5_proj.rds"))
+
+```
+
+Plots.
+
+```{r}
+
+# Plot by functional.cluster.
+
+HCC_5_plot_proj <- DimPlot(HC_5_proj, group.by= "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "HC_5_projecTILs")
+
+ggsave(plot = HCC_5_plot_proj, file.path(datapath,"plots_final/HC_5_projectils.pdf"), width = 7, height = 7)
+
+HCC_5_plot_proj
+
+# Split by phenotype.
+
+HCC_5_plot_proj_phen <- DimPlot(HC_5_proj, group.by= "functional.cluster", split.by = "functional.cluster", cols= colors, label = F) + 
+  theme(aspect.ratio = 1) +
+  labs(title = "HC_5_projecTILs")
+
+ggsave(plot = HCC_5_plot_proj_phen, file.path(datapath, "plots_final/HC_5_projectils_phenotype.pdf"), width = 15, height = 4)
+
+HCC_5_plot_proj_phen
+
+```
+
+# Checkpoint.
+
+```{r}
+
+# Load Seurat objects
+
+LC_2_proj <- readRDS(file.path(datapath, "seurat/LC_2_proj.rds"))
+ML_3_proj <- readRDS(file.path(datapath, "seurat/ML_3_proj.rds"))
+HC_5_proj <- readRDS(file.path(datapath, "seurat/HC_5_proj.rds"))
+
+# Create a list with datasets.
+
+datasets_features <- list("lung_kim" = LC_2_proj,
+                 "melanoma_jerby_arnon" = ML_3_proj,
+                 "hepatocarcinoma_ma" = HC_5_proj)
+
+```
+
+Add NEDD8 expression levels to meta.data.
+
+```{r}
+
+datasets_features$lung_kim$'nedd8_expression_level' <- datasets_features$lung_kim@assays$RNA@layers$data.2[grep("^NEDD8$", datasets_features$lung_kim@assays$RNA@features[[1]]),]
+datasets_features$melanoma_jerby_arnon$'nedd8_expression_level' <- datasets_features$melanoma_jerby_arnon@assays$RNA@layers$data.2[grep("^NEDD8$",datasets_features$melanoma_jerby_arnon@assays$RNA@features[[1]]),]
+datasets_features$hepatocarcinoma_ma$'nedd8_expression_level' <- datasets_features$hepatocarcinoma_ma@assays$RNA@layers$data.2[grep("^NEDD8$",datasets_features$hepatocarcinoma_ma@assays$RNA@features[[1]]),]
+
+```
+
+# Naïve- and effector-like CD8+ T cells.
+
+Plot function.
+
+```{r}
+
+# Plot colors.
+
+colors = list("CD8.EM" = "#1F78B4",
+              "CD8.NaiveLike" = "#33A02C")
+
+# Feature plot mean + s.e.m function.
+
+feature_plot <- function(data, i) {
+  
+  ordered_factor <- factor(names(data[[i]]$mean),
+                           levels = c("CD8.NaiveLike", "CD8.EM"))
+  plot <- ggplot() +
+    geom_errorbar(stat = "identity",
+                  aes(x = ordered_factor,
+                      y = data[[i]]$mean,
+                      ymin = data[[i]]$mean - data[[i]]$sem,
+                      ymax = data[[i]]$mean + data[[i]]$sem),
+                  position = position_dodge(width = 0.8),
+                  width = 0.1) +
+    geom_point(stat = "identity",
+               aes(x = ordered_factor,
+                   y = data[[i]]$mean,
+                   fill = names(data[[i]]$mean)),
+               width = 0.5,
+               shape = 21, 
+               size = 3, 
+               alpha = 1) +
+    scale_color_manual(values = colors) +
+    scale_fill_manual(values = colors, guide = "legend") +
+    theme_classic() +
+    labs(title = i,
+         x = "phenotype",
+         y = "expression",
+         fill = "functional.cluster") +
+    theme(aspect.ratio = 1.5, axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle(i)
+  
+  return(plot)
+}
+
+# Feature plot n_iter + alpha function.
+
+
+feature_plot_alpha <- function(data, i) {
+  
+  tidy_data <- as.data.frame(data[[i]]$mean_list) %>%
+    rownames_to_column(var = "iter") %>%
+    pivot_longer(cols = -iter, names_to = "phenotype", values_to = "value")
+    
+  phenotype.list <- unique(tidy_data$phenotype)
+  desired_order <- c("CD8.NaiveLike", "CD8.EM")
+  
+  phenotype.list <- factor(phenotype.list, levels = desired_order, ordered = TRUE)
+  phenotype.list <- as.character(phenotype.list[order(phenotype.list)])
+  
+  # Reorder the phenotype column based on ordered_vector.
+  
+  tidy_data_reordered <- tidy_data %>%
+    mutate(phenotype = factor(phenotype, levels = desired_order)) %>%
+    arrange(phenotype)
+  
+  plot <- ggplot(tidy_data_reordered, aes(x = phenotype,
+                                y = value,
+                                fill = phenotype)) +
+    geom_point(position = position_dodge(width = 0.8),
+                shape = 21,
+                size = 3,
+                alpha = 0.5)  +
+    scale_color_manual(values = colors) +
+    scale_fill_manual(values = colors, guide = "legend") +
+    theme_classic() +
+    labs(title = i,
+         x = "phenotype",
+         y = "expression",
+         fill = "ordered_factor") +
+    theme(aspect.ratio = 1.5, axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle(i)
+  
+  return(plot)
+}
+
+```
+
+# NEDD8 expression.
+
+NEDD8 expression levels (iterative sampling: 10 random cells x 50 times).
+
+```{r}
+
+names <- names(datasets_features)
+n_iter <- 50
+ncells <- 10
+signature <- "nedd8_expression_level"
+
+exp_nedd8 <- list()
+
+exp_nedd8 <- lapply(setNames(names, names), function(x) {
+  
+  data <- datasets_features[[x]]@meta.data
+  data <- subset(data, subset = functional.cluster != "NA")
+  data <- subset(data, subset = functional.cluster %in% c("CD8.NaiveLike", "CD8.EM"))
+  
+  # Initialize matrices to store mean and s.d.
+  
+  mean <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  sd <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  sem <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  
+  # Sample cells and calculate mean and sd for n_iter and functional.cluster.
+  
+  for (i in 1:n_iter) {
+    
+    for (j in 1:n_distinct(levels(as.factor(data$functional.cluster)))) {
+      
+      data_sub <- data %>% filter(functional.cluster == levels(as.factor(data$functional.cluster))[j])
+      
+      # Eliminate cells with non-detectable NEDD8 expression.
+      
+      data_sub <- data_sub %>% filter(nedd8_expression_level != 0)
+      
+      # Adjust the sample size to 5 cells.
+      
+      sample_size <- ifelse(length(data_sub$functional.cluster) < ncells, min(length(data_sub$functional.cluster), ncells), ncells)
+      data_sample <- sample_n(data_sub, size = sample_size, replace = TRUE)
+      
+      mean[i, j] <- mean(na.omit(data_sample[[signature]]))
+      sd[i,j] <- sd(na.omit(data_sample[[signature]]))
+      sem[i,j] <- sd(na.omit(data_sample[[signature]])) / sqrt(sample_size)
+      
+    }
+  }
+  
+      # Set column names based on levels of "functional.cluster".
+  
+      phen <- levels(as.factor(data$functional.cluster))[1:n_distinct(levels(as.factor(data$functional.cluster)))]
+      colnames(mean) <- phen
+      colnames(sd) <- phen
+      colnames(sem) <- phen
+      
+  return(list(mean = colMeans(mean),
+              mean_list = mean,
+              sem = sqrt(colSums(sem^2) / n_iter),
+              sem_list = sem))
+  
+})
+
+```
+
+## P-values (sig).
+
+```{r}
+
+# t.test p-values.
+
+exp_nedd8_p_values <- list()
+
+for (i in names) {
+  
+  data <- exp_nedd8[[i]]$mean_list
+  cd8.em <- data[,1]
+  cd8.n <- data[,2]
+  p <- t.test(cd8.em, cd8.n)
+  exp_nedd8_p_values[[as.character(i)]] <- p$p.value
+  
+}
+
+print(exp_nedd8_p_values)
+
+```
+
+## Plots.
+
+Plots mean + s.e.m.
+
+```{r, warning=FALSE}
+
+plot_nedd8 <- lapply(names(exp_nedd8), function(i) {
+  feature_plot(exp_nedd8, i)
+})
+
+wrap_plots(plot_nedd8)
+
+ggsave(plot = wrap_plots(plot_nedd8), file.path(datapath, "plots_final/plot_iter_nedd8_mean.pdf"), width = 12, height = 6)
+
+```
+
+Individual n_iter + alpha.
+
+```{r, warning=FALSE}
+
+plot_nedd8_alpha <- lapply(names(exp_nedd8), function(i) {
+  feature_plot_alpha(exp_nedd8, i)
+})
+
+ggsave(plot = wrap_plots(plot_nedd8_alpha), file.path(datapath, "plots_final/plot_iter_nedd8.pdf"), width = 12, height = 6)
+
+wrap_plots(plot_nedd8_alpha)
+
+```
+
+# Neddylation.
+
+UCell score for the neddylation signature (iterative sampling: 10 random cells x 50 times).
+
+```{r}
+
+names <- names(datasets_features)
+n_iter <- 50
+ncells <- 10
+signature <- "neddylation_UCell"
+
+exp_neddylation <- list()
+
+exp_neddylation <- lapply(setNames(names, names), function(x) {
+  
+  data <- datasets_features[[x]]@meta.data
+  data <- subset(data, subset = functional.cluster != "NA")
+  data <- subset(data, subset = functional.cluster %in% c("CD8.NaiveLike", "CD8.EM"))
+  
+  # Initialize matrices to store mean and s.d.
+  
+  mean <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  sd <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  sem <- matrix(0, nrow = n_iter, ncol = n_distinct(levels(as.factor(data$functional.cluster))))
+  
+  # Sample cells and calculate mean and sd for n_iter and functional.cluster.
+  
+  for (i in 1:n_iter) {
+    
+    for (j in 1:n_distinct(levels(as.factor(data$functional.cluster)))) {
+      
+      data_sub <- data %>% filter(functional.cluster == levels(as.factor(data$functional.cluster))[j])
+      
+      # Adjust the sample size to 25 cells or min number of cells.
+      
+      sample_size <- ifelse(length(data_sub$functional.cluster) < ncells, min(length(data_sub$functional.cluster), ncells), ncells)
+      data_sample <- sample_n(data_sub, size = sample_size, replace = TRUE)
+      
+      mean[i, j] <- mean(na.omit(data_sample[[signature]]))
+      sd[i,j] <- sd(na.omit(data_sample[[signature]]))
+      sem[i,j] <- sd(na.omit(data_sample[[signature]])) / sqrt(sample_size)
+      
+    }
+  }
+  
+      # Set column names based on levels of "functional.cluster".
+  
+      phen <- levels(as.factor(data$functional.cluster))[1:n_distinct(levels(as.factor(data$functional.cluster)))]
+      colnames(mean) <- phen
+      colnames(sd) <- phen
+      colnames(sem) <- phen
+      
+  return(list(mean = colMeans(mean),
+              mean_list = mean,
+              sem = sqrt(colSums(sem^2) / n_iter),
+              sem_list = sem))
+  
+})
+
+```
+
+## P-values (ns).
+
+```{r}
+
+# t.test p-values
+
+exp_neddylation_p_values <- list()
+
+for (i in names) {
+  
+  data <- exp_neddylation[[i]]$mean_list
+  cd8.em <- data[,1]
+  cd8.n <- data[,2]
+  p <- t.test(cd8.em, cd8.n)
+  exp_neddylation_p_values[[as.character(i)]] <- p$p.value
+  
+}
+
+print(exp_neddylation_p_values)
+
+```
+
+## Plots.
+
+Plots mean + s.e.m.
+
+```{r, warning= FALSE}
+
+plot_neddylation <- lapply(names(exp_neddylation), function(i) {
+  feature_plot(exp_neddylation, i)
+})
+
+ggsave(plot = wrap_plots(plot_neddylation), file.path(datapath, "plots_final/plot_iter_neddylation_mean.pdf"), width = 12, height = 6)
+
+wrap_plots(plot_neddylation)
+
+```
+
+Individual n_iter + alpha.
+
+```{r, warning=FALSE}
+
+plot_neddylation_alpha <- lapply(names(exp_neddylation), function(i) {
+  feature_plot_alpha(exp_neddylation, i)
+})
+
+ggsave(plot = wrap_plots(plot_neddylation_alpha), file.path(datapath, "plots_final/plot_iter_neddylation.pdf"), width = 12, height = 6)
+
+wrap_plots(plot_neddylation_alpha)
+
+```
