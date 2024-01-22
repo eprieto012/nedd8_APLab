@@ -1,4 +1,4 @@
-# nedd8_APLab
+# Expression levels of NEDD8 and neddylation gene-signature in lung-cancer associated immune and non-immune populations
 
 This repository contains the R script to reproduce bioinformatics analyses from the work by Jimenez-Lasheras et al. 2024 (manuscript under review). Using the single-cell lung cancer atlas by [Prazanowska et al 2023](https://www.nature.com/articles/s41597-023-02074-6), we first examined the expression of NEDD8 and a neddylation signature (Reactome) in tumor-associated immune and non-immune populations (Fig. 1a). Our results suggest an important role of NEDD8 during the differentiation of effector-like and proliferative CD8+ T cells, reaching expression levels comparable to cancer cells (Fig 1b). These results were confirmed for NEDD8 expression by interrogating three representative datasets of lung cancer [GSE131907](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131907), melanoma [GSE115978](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE115978) and hepatocarcinoma [GSE125499](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125449). 
 
