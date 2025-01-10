@@ -4,7 +4,7 @@ This repository contains the R script to reproduce bioinformatics analyses from 
 
 The annotated R markdown file (nedd8_expression_v3_final.Rmd) interrogates the expression of both NEDD8 and the neddylation signature in naïve-like and effector-like CD8+ T cells in the above-mentioned datasets (Fig. 1c). Briefly, high-quality T cells are filtered using [scGate](https://github.com/carmonalab/scGate) and annotated using a [human CD8+ T cell](https://figshare.com/articles/dataset/ProjecTILs_human_reference_atlas_of_CD8_tumor-infiltrating_T_cells_CD8_TIL_version_1/23608308) reference map with [ProjecTILs](https://github.com/carmonalab/ProjecTILs). The expression of the neddylation signature from Reactome was evaluated using [UCell](https://github.com/carmonalab/UCell).
 
-Fig. 1. UMAP plot of immune and non-immune populations associated with lung cancer.
+Fig. 1a. UMAP plot of immune and non-immune populations associated with lung cancer.
 ![LC_1_S2_minor-1](https://github.com/eprieto012/nedd8_APLab/assets/98150852/791ee874-c049-476b-8ab6-0a040a1f3728)
 
 Fig. 1b. Violin plots showing the expression levels of the indicated markers (NEDD8 and NAE1) or the neddylation gene-signature (Reactome) in lung cancer-associated immune and non-immune populations.
